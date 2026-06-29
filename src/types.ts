@@ -95,6 +95,10 @@ export interface AiAnalysis {
   riskRating: VolatilityRating;
   horizon: '1d' | '7d' | '30d' | '90d';
   modelsScores: ModelScores;
+  expectedReturnPercent?: number;
+  expectedDirection?: 'Bullish' | 'Neutral' | 'Bearish';
+  targetPriceOptional?: number | null;
+  modelName?: string;
 }
 
 export interface ForecastResult {
@@ -120,6 +124,9 @@ export interface Forecast {
   score: number;
   status: ForecastStatus;
   results?: ForecastResult;
+  targetPriceOptional?: number | null;
+  modelName?: string;
+  analysisId?: string;
 }
 
 export interface Alert {

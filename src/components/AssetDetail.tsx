@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { SystemState, Asset, AiAnalysis, AlertType, formatAssetPrice, getCurrencySign } from "../types";
 import AssetChart from "./AssetChart";
-import { Cpu, ArrowLeft, RefreshCw, Check, AlertTriangle, Play, HelpCircle, Calendar, Plus, ShieldAlert, TrendingUp, TrendingDown, Bell } from "lucide-react";
+import { Cpu, ArrowLeft, RefreshCw, Check, AlertTriangle, Play, HelpCircle, Calendar, Plus, ShieldAlert, TrendingUp, TrendingDown, Bell, Copy } from "lucide-react";
 
 interface AssetDetailProps {
   asset: Asset;
@@ -33,6 +33,15 @@ export default function AssetDetail({
   const [horizon, setHorizon] = useState<"1d" | "7d" | "30d" | "90d">("30d");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [expectedChange, setExpectedChange] = useState<number>(8.5);
+  const [isSubmittingForecast, setIsSubmittingForecast] = useState(false);
+  const [forecastMessage, setForecastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Manual AI Context and Import states
+  const [analysisContext, setAnalysisContext] = useState<{ generatedPrompt: string } | null>(null);
+  const [pastedResult, setPastedResult] = useState("");
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importSuccess, setImportSuccess] = useState(false);
 
   // Trade ticket configuration
   const [tradeType, setTradeType] = useState<"BUY" | "SELL">("BUY");
@@ -62,26 +71,98 @@ export default function AssetDetail({
 
   const handleRunAnalysis = async () => {
     setIsAnalyzing(true);
+    setImportError("");
+    setImportSuccess(false);
+    setAnalysisContext(null);
     try {
-      await onRunAiAnalysis(asset.symbol, horizon);
-      // Auto-set an expected change based on recommendations
-      const isBuy = assetAnalyses[0]?.recommendation === "Kaufen";
-      const isSell = assetAnalyses[0]?.recommendation === "Verkaufen";
-      setExpectedChange(isBuy ? 10.5 : isSell ? -10.5 : 0);
+      const res = await fetch(`/api/analysis-context/${asset.symbol}?horizon=${horizon}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAnalysisContext(data);
+      } else {
+        const err = await res.json();
+        setImportError(err.error || "Fehler beim Laden des Analyse-Kontextes.");
+      }
     } catch (err) {
       console.error(err);
+      setImportError("Netzwerkfehler beim Abrufen des Analyse-Kontexts.");
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleSubmitForecast = async () => {
-    if (!latestAnalysis) return;
+  const handleCopyPrompt = () => {
+    if (!analysisContext) return;
+    navigator.clipboard.writeText(analysisContext.generatedPrompt);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2000);
+  };
+
+  const handleImportAnalysis = async () => {
+    if (!pastedResult.trim()) {
+      setImportError("Bitte füge das Analyse-Ergebnis (JSON) ein.");
+      return;
+    }
+    setImportError("");
+    setImportSuccess(false);
+
     try {
-      await onSubmitForecast(latestAnalysis.id, expectedChange);
-      alert("Prognose erfolgreich an das Forecast-Tracking übergeben!");
+      const res = await fetch("/api/analysis/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: asset.symbol,
+          pastedResult,
+          horizon
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setImportSuccess(true);
+        setPastedResult("");
+        setAnalysisContext(null);
+        // Trigger state reload in parent component so that list and latest analysis update
+        await onRunAiAnalysis(asset.symbol, horizon);
+        
+        // Auto-set expected change based on imported properties if available
+        const imported = data.analysis;
+        if (imported && imported.expectedReturnPercent !== undefined) {
+          setExpectedChange(Number(imported.expectedReturnPercent));
+        } else {
+          const isBuy = imported?.recommendation === "Kaufen";
+          const isSell = imported?.recommendation === "Verkaufen";
+          setExpectedChange(isBuy ? 10.5 : isSell ? -10.5 : 0);
+        }
+      } else {
+        const err = await res.json();
+        setImportError(err.error || "Fehler beim Importieren der Analyse.");
+      }
     } catch (err) {
       console.error(err);
+      setImportError("Netzwerkfehler beim Importieren der Analyse.");
+    }
+  };
+
+  const handleSubmitForecast = async () => {
+    if (!latestAnalysis) return;
+    setIsSubmittingForecast(true);
+    setForecastMessage(null);
+    try {
+      await onSubmitForecast(latestAnalysis.id, expectedChange);
+      setForecastMessage({
+        type: "success",
+        text: "Prognose erfolgreich an das Forecast-Tracking übergeben!"
+      });
+      setTimeout(() => setForecastMessage(null), 4000);
+    } catch (err: any) {
+      console.error(err);
+      setForecastMessage({
+        type: "error",
+        text: err.message || "Fehler beim Einreichen der Prognose."
+      });
+    } finally {
+      setIsSubmittingForecast(false);
     }
   };
 
@@ -272,42 +353,128 @@ export default function AssetDetail({
               <div className="p-5 space-y-6">
                 
                 {/* Trigger control for Analysis */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Analyse-Konfiguration</span>
-                    <p className="text-xs text-slate-500">Erzeuge ein KI-Vollgutachten für Dein bevorzugtes Zeitintervall.</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={horizon}
-                      onChange={(e: any) => setHorizon(e.target.value)}
-                      className="p-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none"
-                    >
-                      <option value="1d">1 Tag (Kurzfristig)</option>
-                      <option value="7d">7 Tage (Wochen-Trend)</option>
-                      <option value="30d">30 Tage (Mittelwert)</option>
-                      <option value="90d">90 Tage (Quartal)</option>
-                    </select>
+                <div className="flex flex-col gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Analyse-Konfiguration</span>
+                      <p className="text-xs text-slate-500 font-medium">Erzeuge ein KI-Vollgutachten für Dein bevorzugtes Zeitintervall.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={horizon}
+                        onChange={(e: any) => setHorizon(e.target.value)}
+                        className="p-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none"
+                      >
+                        <option value="1d">1 Tag (Kurzfristig)</option>
+                        <option value="7d">7 Tage (Wochen-Trend)</option>
+                        <option value="30d">30 Tage (Mittelwert)</option>
+                        <option value="90d">90 Tage (Quartal)</option>
+                      </select>
 
-                    <button
-                      onClick={handleRunAnalysis}
-                      disabled={isAnalyzing}
-                      className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-500 text-white font-semibold rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      {isAnalyzing ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          Generiere Consensus...
-                        </>
-                      ) : (
-                        <>
-                          <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-                          KI-Analyse starten
-                        </>
-                      )}
-                    </button>
+                      <button
+                        onClick={handleRunAnalysis}
+                        disabled={isAnalyzing}
+                        className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-500 text-white font-semibold rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            Kontext wird erzeugt...
+                          </>
+                        ) : (
+                          <>
+                            <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                            KI-Kontext erzeugen
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
+
+                  <p className="text-[11px] text-slate-500 bg-white p-2.5 rounded-lg border border-slate-100 leading-relaxed font-medium">
+                    💡 <strong className="text-slate-700">Hinweis:</strong> MarketOps AI nutzt keine KI-API. Kopiere den Analyse-Kontext in deinen bevorzugten KI-Agenten (z.B. Gemini, Claude oder ChatGPT) und füge das strukturierte JSON-Ergebnis hier wieder ein.
+                  </p>
                 </div>
+
+                {/* Manual Workspace when analysisContext is loaded */}
+                {analysisContext && (
+                  <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100/60 space-y-4 animate-fadeIn">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                      <Cpu className="w-4 h-4 text-indigo-500" />
+                      Manueller KI-Analyse-Workflow ({horizon})
+                    </h3>
+
+                    {/* Step 1: Copy Prompt */}
+                    <div className="space-y-2 bg-white p-4 rounded-lg border border-indigo-100">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-700">Schritt 1: Analyse-Prompt kopieren</span>
+                        <button
+                          onClick={handleCopyPrompt}
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-[10px] flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          {copiedPrompt ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              Kopiert!
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              Prompt kopieren
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Der generierte Prompt enthält alle relevanten Markt- und Fundamentaldaten sowie aktuelle Nachrichten.
+                      </p>
+                      <div className="relative">
+                        <textarea
+                          readOnly
+                          value={analysisContext.generatedPrompt}
+                          className="w-full h-24 p-2 text-[10px] font-mono bg-slate-50 text-slate-600 border border-slate-200 rounded-md focus:outline-none resize-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Step 2: Paste Result */}
+                    <div className="space-y-2 bg-white p-4 rounded-lg border border-indigo-100">
+                      <span className="text-xs font-bold text-slate-700 block">Schritt 2: Analyse-Ergebnis (JSON) einfügen</span>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Führe die Analyse mit deiner bevorzugten KI durch und füge das unformatiert ausgegebene JSON hier ein.
+                      </p>
+                      <textarea
+                        value={pastedResult}
+                        onChange={(e) => setPastedResult(e.target.value)}
+                        placeholder='Z.B.: { "recommendation": "BUY", "score": 85, ... }'
+                        className="w-full h-32 p-2.5 text-[11px] font-mono border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50 text-slate-800 placeholder-slate-400"
+                      />
+
+                      {importError && (
+                        <div className="p-2.5 bg-red-50 border border-red-200 rounded text-xs text-red-600 font-semibold flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                          <span>{importError}</span>
+                        </div>
+                      )}
+
+                      {importSuccess && (
+                        <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-700 font-semibold flex items-start gap-1.5 animate-fadeIn">
+                          <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                          <span>Analyse erfolgreich importiert! Die Auswertung wurde in der Historie gespeichert.</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end pt-1">
+                        <button
+                          onClick={handleImportAnalysis}
+                          className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          Analyse importieren
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Display latest analysis */}
                 {latestAnalysis ? (
@@ -330,26 +497,40 @@ export default function AssetDetail({
                       </div>
 
                       {/* Submit Forecast directly based on score */}
-                      <div className="space-y-1 w-full sm:w-auto bg-indigo-50/40 p-3 rounded-xl border border-indigo-100/60">
+                      <div className="space-y-1 w-full sm:w-auto bg-indigo-50/40 p-3 rounded-xl border border-indigo-100/60 flex flex-col justify-center">
                         <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider block">Prognose tracken</span>
                         <div className="flex items-center gap-2">
                           <div className="relative w-24">
                             <input
                               type="number"
                               step="any"
+                              disabled={isSubmittingForecast}
                               value={expectedChange}
                               onChange={(e) => setExpectedChange(parseFloat(e.target.value) || 0)}
-                              className="w-full p-1 border border-slate-200 rounded-md text-xs font-semibold text-center font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              className="w-full p-1 border border-slate-200 rounded-md text-xs font-semibold text-center font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                             />
                             <span className="absolute right-1.5 top-1.5 text-[10px] font-bold text-slate-400">%</span>
                           </div>
                           <button
                             onClick={handleSubmitForecast}
-                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-xs font-semibold cursor-pointer transition-colors"
+                            disabled={isSubmittingForecast}
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[70px]"
                           >
-                            Einreichen
+                            {isSubmittingForecast ? "Speichert..." : "Einreichen"}
                           </button>
                         </div>
+                        {latestAnalysis.targetPriceOptional !== undefined && latestAnalysis.targetPriceOptional !== null && (
+                          <div className="text-[10px] text-indigo-600 font-semibold mt-1">
+                            Optionaler Zielkurs: {formatAssetPrice(Number(latestAnalysis.targetPriceOptional), asset.currency)}
+                          </div>
+                        )}
+                        {forecastMessage && (
+                          <div className={`text-[10px] font-bold mt-1 max-w-[200px] leading-tight ${
+                            forecastMessage.type === "success" ? "text-emerald-600" : "text-rose-600"
+                          }`}>
+                            {forecastMessage.text}
+                          </div>
+                        )}
                       </div>
                     </div>
 

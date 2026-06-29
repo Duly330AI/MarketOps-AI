@@ -554,43 +554,56 @@ app.post("/api/trade", async (req, res) => {
   res.json(state);
 });
 
-// Analyze using real news and real history
-app.post("/api/analyze", async (req, res) => {
-  const { symbol, horizon } = req.body;
-  if (!symbol || !horizon) {
-    return res.status(400).json({ error: "Symbol and Horizon are required." });
+// Get analysis context and generated prompt for manual KI agent execution
+app.get("/api/analysis-context/:symbol", async (req, res) => {
+  const { symbol } = req.params;
+  const horizon = (req.query.horizon as string) || "30d";
+
+  if (!symbol) {
+    return res.status(400).json({ error: "Symbol is required." });
   }
 
+  const upperSymbol = symbol.toUpperCase();
   const state = loadState();
-  const asset = await fetchLiveAssetData(symbol);
-  
+  const asset = await fetchLiveAssetData(upperSymbol);
+
   if (!asset) {
     return res.status(404).json({ error: "Real market data unavailable for this asset." });
   }
 
-  const assetIdx = state.assets.findIndex(a => a.symbol === symbol);
-  if (assetIdx >= 0) state.assets[assetIdx] = asset;
+  // Sync asset to state
+  const assetIdx = state.assets.findIndex(a => a.symbol === upperSymbol);
+  if (assetIdx >= 0) {
+    state.assets[assetIdx] = asset;
+  }
 
   // Fetch real news and quote
   let realNews = "";
+  let newsList: any[] = [];
   let quote: any = {};
   let fullHistory: any[] = [];
+
   try {
-    const searchRes: any = await yahooFinance.search(symbol);
+    const searchRes: any = await yahooFinance.search(upperSymbol);
     if (searchRes.news && searchRes.news.length > 0) {
-      realNews = searchRes.news.slice(0, 3).map(n => `- ${n.title} (Publisher: ${n.publisher} - Timestamp: ${new Date(n.providerPublishTime).toISOString()})`).join("\n");
+      newsList = searchRes.news.slice(0, 5).map((n: any) => ({
+        title: n.title,
+        publisher: n.publisher,
+        timestamp: new Date(n.providerPublishTime).toISOString(),
+      }));
+      realNews = searchRes.news.slice(0, 3).map((n: any) => `- ${n.title} (Publisher: ${n.publisher} - Timestamp: ${new Date(n.providerPublishTime).toISOString()})`).join("\n");
       
       // Also add this real news to the global feed
-      searchRes.news.slice(0, 3).forEach(n => {
+      searchRes.news.slice(0, 3).forEach((n: any) => {
         if (!state.news.find(sn => sn.id === n.uuid)) {
           state.news.unshift({
             id: n.uuid,
             date: new Date(n.providerPublishTime).toISOString(),
-            symbol,
+            symbol: upperSymbol,
             assetName: asset.name,
             title: n.title,
             summary: `Publisher: ${n.publisher}`,
-            sentiment: "neutral", // Can't easily determine sentiment without AI, default to neutral
+            sentiment: "neutral",
             impactPercent: 0
           });
         }
@@ -599,12 +612,12 @@ app.post("/api/analyze", async (req, res) => {
       realNews = "Keine aktuellen Nachrichten gefunden.";
     }
 
-    quote = await yahooFinance.quote(symbol);
+    quote = await yahooFinance.quote(upperSymbol);
     
     const p1 = new Date();
     p1.setDate(p1.getDate() - 300);
     const p2 = new Date();
-    fullHistory = await yahooFinance.historical(symbol, { period1: p1, period2: p2 } as any);
+    fullHistory = await yahooFinance.historical(upperSymbol, { period1: p1, period2: p2 } as any);
 
   } catch (e) {
     realNews = "Nachrichtenabruf fehlgeschlagen.";
@@ -632,7 +645,6 @@ app.post("/api/analyze", async (req, res) => {
   const systemPrompt = `Du bist ein professioneller Finanzanalyst für ein Finanz-NOC (Network Operations Center).
 Deine Aufgabe ist es, eine präzise, messbare und ehrliche KI-gestützte Einschätzung für ein Asset basierend auf ECHTEN Marktdaten und ECHTEN Nachrichten abzugeben.
 Erfinde KEINE Nachrichten. Erfinde KEINE Kennzahlen (Wenn ein Wert "unknown" oder null ist, schreibe, dass er nicht verfügbar ist).
-Gib Deine Antwort STRENG im JSON-Format gemäß des vorgegebenen Schemas aus.
 Spreche Deutsch. Vermeide Allgemeinplätze und formuliere konkrete Argumente (Bull Case, Bear Case, technische & fundamentale Lage).`;
 
   const userPrompt = `Analysiere folgendes Finanzinstrument:
@@ -640,7 +652,7 @@ Name: ${asset.name} (${asset.symbol})
 Asset-Klasse: ${asset.type}
 
 PREIS & ENTWICKLUNG:
-Aktueller Preis: ${asset.currentPrice} 
+Aktueller Preis: ${asset.currentPrice} ${asset.currency}
 Tagesänderung: ${asset.dailyChangePercent}%
 7-Tage-Entwicklung: ${asset.change7DaysPercent}%
 Preis vor 30 Tagen: ${price30} (Entwicklung: ${asset.change30DaysPercent}%)
@@ -669,79 +681,179 @@ Zeithorizont der Analyse: ${horizon}
 
 Leite daraus einen objektiven Consensus-Score (0-100, wobei >70 Kaufen, <35 Verkaufen, 35-50 Beobachten, 50-70 Halten entspricht) und eine glasklare Empfehlung ab. Berücksichtige die Unsicherheit bei fehlenden Werten (unknown).`;
 
-  const client = getGeminiClient();
+  const generatedPrompt = `${systemPrompt}\n\n${userPrompt}\n\n### ANWEISUNG FÜR DIE ANTWORT:\nAntworte ausschließlich mit einem validen JSON-Objekt. Kein Markdown (keine \`\`\`json Blöcke). Keine Kommentare. Kein Text davor oder danach.\n\n### REGELN:\n1. Verwende für recommendation nur einen dieser Werte: BUY, HOLD, SELL, WATCH.\n2. Verwende für expectedDirection nur einen dieser Werte: Bullish, Bearish, Neutral.\n3. score und confidence müssen Zahlen von 0 bis 100 sein.\n4. expectedReturnPercent muss eine Zahl sein.\n5. targetPriceOptional muss eine Zahl oder null sein.\n\n### BESCHREIBUNG DER JSON-FELDER:\n- recommendation: Empfehlungstyp (BUY, HOLD, SELL oder WATCH)\n- score: Gesamtbewertung (0 bis 100)\n- confidence: Konfidenzniveau (0 bis 100)\n- horizon: Zeithorizont der Analyse (z.B. "${horizon}")\n- bullCase: Optimistische Argumente (Deutsch)\n- bearCase: Pessimistische Argumente (Deutsch)\n- technicalSummary: Technische Kurzeinschätzung (Deutsch)\n- fundamentalSummary: Fundamentale Kurzeinschätzung (Deutsch)\n- riskSummary: Zusammenfassung der Risiken (Deutsch)\n- expectedDirection: Erwartete Kursrichtung (Bullish, Bearish oder Neutral)\n- expectedReturnPercent: Erwartete Rendite in Prozent als Zahl\n- targetPriceOptional: Optionaler Zielkurs als Zahl oder null\n- keyRisks: Array der Hauptrisiken (Strings, Deutsch)\n- sourcesUsed: Array der genutzten Quellen (Strings)\n- modelName: Name deines verwendeten KI-Modells\n\n### BEISPIEL FÜR EIN VALIDES ANTWORT-FORMAT:\n{\n  "recommendation": "BUY",\n  "score": 85,\n  "confidence": 90,\n  "horizon": "${horizon}",\n  "bullCase": "Starke Chip-Nachfrage und exzellente Marktstellung.",\n  "bearCase": "Zunehmender Wettbewerb und Exportbeschränkungen.",\n  "technicalSummary": "RSI ist neutral, SMA 200 bietet stabile Unterstützung.",\n  "fundamentalSummary": "Hohes KGV, aber gerechtfertigt durch starkes Wachstum.",\n  "riskSummary": "Abhängigkeit von Lieferketten und geopolitischen Faktoren.",\n  "expectedDirection": "Bullish",\n  "expectedReturnPercent": 15.0,\n  "targetPriceOptional": 160.0,\n  "keyRisks": [\n    "Lieferkettenrisiken",\n    "Geopolitische Konflikte"\n  ],\n  "sourcesUsed": [\n    "Yahoo Finance Market Data",\n    "Finanznachrichten"\n  ],\n  "modelName": "Claude-3.5-Sonnet"\n}`;
 
-  if (!client) {
-    return res.status(500).json({ error: "Gemini API Key ist nicht konfiguriert." });
+  const expectedResultSchema = {
+    type: "object",
+    properties: {
+      recommendation: { type: "string", enum: ["BUY", "HOLD", "SELL", "WATCH"] },
+      score: { type: "number", minimum: 0, maximum: 100 },
+      confidence: { type: "number", minimum: 0, maximum: 100 },
+      horizon: { type: "string" },
+      bullCase: { type: "string" },
+      bearCase: { type: "string" },
+      technicalSummary: { type: "string" },
+      fundamentalSummary: { type: "string" },
+      riskSummary: { type: "string" },
+      expectedDirection: { type: "string", enum: ["Bullish", "Bearish", "Neutral"] },
+      expectedReturnPercent: { type: "number" },
+      targetPriceOptional: { type: "number", nullable: true },
+      keyRisks: { type: "array", items: { type: "string" } },
+      sourcesUsed: { type: "array", items: { type: "string" } },
+      modelName: { type: "string" }
+    },
+    required: [
+      "recommendation", "score", "confidence", "horizon", "bullCase", "bearCase",
+      "technicalSummary", "fundamentalSummary", "riskSummary", "expectedDirection",
+      "expectedReturnPercent", "keyRisks", "sourcesUsed", "modelName"
+    ]
+  };
+
+  const structuredContext = {
+    symbol: upperSymbol,
+    name: asset.name,
+    assetType: asset.type,
+    currency: asset.currency,
+    currentPrice: asset.currentPrice,
+    dailyChangePercent: asset.dailyChangePercent,
+    change7DaysPercent: asset.change7DaysPercent,
+    change30DaysPercent: asset.change30DaysPercent,
+    price30,
+    price90,
+    recentPrices,
+    rsi14,
+    sma20,
+    sma50,
+    sma200,
+    volume,
+    avgVolume,
+    marketCap,
+    peRatio,
+    forwardPE,
+    divYield,
+    earningsDate,
+    newsHeadlines: newsList
+  };
+
+  saveState(state);
+
+  res.json({
+    structuredContext,
+    generatedPrompt,
+    expectedResultSchema
+  });
+});
+
+// Import manual analysis output
+app.post("/api/analysis/import", async (req, res) => {
+  const { symbol, pastedResult, horizon } = req.body;
+  if (!symbol || !pastedResult || !horizon) {
+    return res.status(400).json({ error: "Symbol, Pasted Result, und Horizon sind erforderlich." });
   }
 
+  const state = loadState();
+  const asset = state.assets.find(a => a.symbol === symbol.toUpperCase()) || await fetchLiveAssetData(symbol);
+  if (!asset) {
+    return res.status(404).json({ error: "Wertpapier wurde nicht im System gefunden." });
+  }
+
+  let data: any;
   try {
-    const response = await client.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            recommendation: { type: Type.STRING, description: "'Beobachten', 'Kaufen', 'Halten', 'Verkaufen'" },
-            score: { type: Type.INTEGER, description: "Konsens-Analysescore 0-100" },
-            summary: { type: Type.STRING },
-            bullCase: { type: Type.STRING },
-            bearCase: { type: Type.STRING },
-            technicalAnalysis: { type: Type.STRING },
-            fundamentalAnalysis: { type: Type.STRING },
-            newsSentiment: { type: Type.STRING },
-            riskRating: { type: Type.STRING },
-            modelsScores: {
-              type: Type.OBJECT,
-              properties: {
-                gemini: { type: Type.INTEGER },
-                gpt: { type: Type.INTEGER },
-                claude: { type: Type.INTEGER },
-                technical: { type: Type.INTEGER }
-              },
-              required: ["gemini", "gpt", "claude", "technical"]
-            }
-          },
-          required: [
-            "recommendation", "score", "summary", "bullCase", "bearCase", 
-            "technicalAnalysis", "fundamentalAnalysis", "newsSentiment", 
-            "riskRating", "modelsScores"
-          ]
-        }
-      }
-    });
-
-    const parsedAnalysis = JSON.parse(response.text || "{}");
-    
-    const newAnalysis: AiAnalysis = {
-      id: `ai-an-${Date.now()}`,
-      symbol,
-      assetName: asset.name,
-      date: new Date().toISOString(),
-      score: parsedAnalysis.score || 50,
-      recommendation: parsedAnalysis.recommendation || "Halten",
-      summary: parsedAnalysis.summary || "Keine Zusammenfassung verfügbar.",
-      bullCase: parsedAnalysis.bullCase || "Keine Bull-Case Details.",
-      bearCase: parsedAnalysis.bearCase || "Keine Bear-Case Details.",
-      technicalAnalysis: parsedAnalysis.technicalAnalysis || "Keine technische Analyse.",
-      fundamentalAnalysis: parsedAnalysis.fundamentalAnalysis || "Keine fundamentale Analyse.",
-      newsSentiment: parsedAnalysis.newsSentiment || "Neutrales Sentiment.",
-      riskRating: parsedAnalysis.riskRating || "medium",
-      horizon,
-      modelsScores: parsedAnalysis.modelsScores
-    };
-
-    state.analyses.unshift(newAnalysis);
-    saveState(state);
-    return res.json({ analysis: newAnalysis, mode: "real_gemini" });
-
-  } catch (err) {
-    console.error("Gemini failed", err);
-    return res.status(500).json({ error: "KI Analyse fehlgeschlagen." });
+    data = JSON.parse(pastedResult.trim());
+  } catch (e) {
+    return res.status(400).json({ error: "Fehler beim Parsen des JSON-Inhalts. Bitte stelle sicher, dass es sich um ein gültiges JSON-Format handelt." });
   }
+
+  // Validate fields
+  const missingFields: string[] = [];
+  const requiredFields = [
+    "recommendation", "score", "confidence", "horizon", "bullCase", "bearCase",
+    "technicalSummary", "fundamentalSummary", "riskSummary", "expectedDirection",
+    "expectedReturnPercent", "keyRisks", "sourcesUsed", "modelName"
+  ];
+
+  requiredFields.forEach(field => {
+    if (data[field] === undefined || data[field] === null) {
+      missingFields.push(field);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({ 
+      error: `Das JSON-Objekt ist unvollständig. Fehlende Pflichtfelder: ${missingFields.join(", ")}` 
+    });
+  }
+
+  // Typ- und Werte-Validierung
+  if (typeof data.score !== "number" || data.score < 0 || data.score > 100) {
+    return res.status(400).json({ error: "Das Feld 'score' muss eine Zahl zwischen 0 und 100 sein." });
+  }
+  if (typeof data.confidence !== "number" || data.confidence < 0 || data.confidence > 100) {
+    return res.status(400).json({ error: "Das Feld 'confidence' muss eine Zahl zwischen 0 und 100 sein." });
+  }
+  if (typeof data.expectedReturnPercent !== "number") {
+    return res.status(400).json({ error: "Das Feld 'expectedReturnPercent' muss eine Zahl sein." });
+  }
+  if (!Array.isArray(data.keyRisks)) {
+    return res.status(400).json({ error: "Das Feld 'keyRisks' muss ein Array von Strings sein." });
+  }
+  if (!Array.isArray(data.sourcesUsed)) {
+    return res.status(400).json({ error: "Das Feld 'sourcesUsed' muss ein Array von Strings sein." });
+  }
+
+  const validRecommendations = ["BUY", "HOLD", "SELL", "WATCH"];
+  const recommendationUpper = String(data.recommendation).toUpperCase();
+  if (!validRecommendations.includes(recommendationUpper)) {
+    return res.status(400).json({ 
+      error: `Ungültiger Empfehlungs-Typ '${data.recommendation}'. Erlaubte Werte: BUY, HOLD, SELL, WATCH` 
+    });
+  }
+
+  const validDirections = ["Bullish", "Bearish", "Neutral"];
+  if (!validDirections.includes(data.expectedDirection)) {
+    return res.status(400).json({ 
+      error: `Ungültige erwartete Richtung '${data.expectedDirection}'. Erlaubte Werte: Bullish, Bearish, Neutral` 
+    });
+  }
+
+  // Map recommendation to German equivalents
+  let recGerman: RecommendationType = "Halten";
+  if (recommendationUpper === "BUY") recGerman = "Kaufen";
+  else if (recommendationUpper === "SELL") recGerman = "Verkaufen";
+  else if (recommendationUpper === "WATCH") recGerman = "Beobachten";
+
+  // Build AiAnalysis object
+  const newAnalysis: AiAnalysis = {
+    id: `ai-an-${Date.now()}`,
+    symbol: asset.symbol,
+    assetName: asset.name,
+    date: new Date().toISOString(),
+    score: data.score,
+    recommendation: recGerman,
+    summary: `Modell: ${data.modelName}. Konfidenz: ${data.confidence}%. Richtung: ${data.expectedDirection} (${data.expectedReturnPercent}%). Risiko-Zusammenfassung: ${data.riskSummary}`,
+    bullCase: data.bullCase,
+    bearCase: data.bearCase,
+    technicalAnalysis: data.technicalSummary,
+    fundamentalAnalysis: data.fundamentalSummary,
+    newsSentiment: data.riskSummary,
+    riskRating: "medium", // Default
+    horizon: data.horizon || horizon,
+    modelsScores: {
+      gemini: recommendationUpper === "BUY" ? data.score : 0,
+      gpt: recommendationUpper === "BUY" ? data.score : 0,
+      claude: recommendationUpper === "BUY" ? data.score : 0,
+      technical: data.score
+    },
+    expectedReturnPercent: Number(data.expectedReturnPercent),
+    expectedDirection: data.expectedDirection,
+    targetPriceOptional: data.targetPriceOptional !== undefined ? data.targetPriceOptional : null,
+    modelName: data.modelName
+  };
+
+  state.analyses.unshift(newAnalysis);
+  saveState(state);
+
+  res.json({ analysis: newAnalysis, state });
 });
 
 app.post("/api/alerts/create", (req, res) => {
@@ -794,6 +906,20 @@ app.post("/api/forecast/create", (req, res) => {
   }
   const state = loadState();
   const asset = state.assets.find(a => a.symbol === symbol);
+
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const isDuplicate = state.forecasts.some(f => 
+    f.status === "active" &&
+    f.symbol === symbol &&
+    !f.analysisId &&
+    f.targetHorizon === targetHorizon &&
+    f.expectedChangePercent === Number(expectedChangePercent) &&
+    f.date.substring(0, 10) === todayStr
+  );
+  if (isDuplicate) {
+    return res.status(400).json({ error: "Diese Prognose wurde bereits gespeichert." });
+  }
+
   state.forecasts.unshift({
     id: `forecast-${Date.now()}`,
     symbol,
@@ -819,13 +945,39 @@ app.post("/api/forecast/submit-from-analysis", (req, res) => {
   if (!analysis) return res.status(404).json({ error: "Analysis not found." });
 
   const asset = state.assets.find(a => a.symbol === analysis.symbol);
-  let direction: "Bullish" | "Neutral" | "Bearish" = "Neutral";
-  if (analysis.recommendation === "Kaufen") direction = "Bullish";
-  if (analysis.recommendation === "Verkaufen") direction = "Bearish";
 
-  const changePct = expectedChangePercent !== undefined 
-    ? Number(expectedChangePercent) 
-    : (direction === "Bullish" ? 8.5 : direction === "Bearish" ? -8.5 : 0.0);
+  // Use imported expectedDirection if available, fallback to mapping recommendation
+  let direction: "Bullish" | "Neutral" | "Bearish" = "Neutral";
+  if (analysis.expectedDirection) {
+    direction = analysis.expectedDirection;
+  } else {
+    if (analysis.recommendation === "Kaufen") direction = "Bullish";
+    if (analysis.recommendation === "Verkaufen") direction = "Bearish";
+  }
+
+  // Use explicit expectedChangePercent if supplied, fallback to imported expectedReturnPercent, fallback to recommendation mapping
+  let changePct = expectedChangePercent !== undefined ? Number(expectedChangePercent) : undefined;
+  if (changePct === undefined) {
+    if (analysis.expectedReturnPercent !== undefined) {
+      changePct = Number(analysis.expectedReturnPercent);
+    } else {
+      changePct = direction === "Bullish" ? 8.5 : direction === "Bearish" ? -8.5 : 0.0;
+    }
+  }
+
+  // Check for duplicate active forecast
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const isDuplicate = state.forecasts.some(f => 
+    f.status === "active" &&
+    f.symbol === analysis.symbol &&
+    f.analysisId === analysisId &&
+    f.targetHorizon === analysis.horizon &&
+    f.expectedChangePercent === changePct &&
+    f.date.substring(0, 10) === todayStr
+  );
+  if (isDuplicate) {
+    return res.status(400).json({ error: "Diese Prognose wurde bereits gespeichert." });
+  }
 
   state.forecasts.unshift({
     id: `forecast-${Date.now()}`,
@@ -837,7 +989,10 @@ app.post("/api/forecast/submit-from-analysis", (req, res) => {
     startPrice: asset?.currentPrice || 0,
     expectedChangePercent: changePct,
     score: analysis.score,
-    status: "active"
+    status: "active",
+    targetPriceOptional: analysis.targetPriceOptional !== undefined ? analysis.targetPriceOptional : null,
+    modelName: analysis.modelName,
+    analysisId: analysis.id
   });
   saveState(state);
   res.json(state);

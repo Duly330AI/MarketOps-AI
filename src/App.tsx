@@ -68,18 +68,7 @@ export default function App() {
   };
 
   const handleRunAiAnalysis = async (symbol: string, horizon: "1d" | "7d" | "30d" | "90d") => {
-    const res = await fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol, horizon })
-    });
-    if (res.ok) {
-      // Re-fetch complete state to populate analyses reverse-chronologically
-      await fetchState();
-    } else {
-      const err = await res.json();
-      throw new Error(err.error || "Fehler bei der KI-Analyse.");
-    }
+    await fetchState();
   };
 
   const handleSubmitForecast = async (analysisId: string, expectedChangePercent: number) => {
@@ -91,6 +80,9 @@ export default function App() {
     if (res.ok) {
       const data = await res.json();
       setState(data);
+    } else {
+      const err = await res.json();
+      throw new Error(err.error || "Fehler beim Erstellen der Prognose.");
     }
   };
 
