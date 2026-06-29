@@ -1,0 +1,6 @@
+{
+  "name": "MarketOps AI",
+  "description": "KI-gestütztes Analyse- und Paper-Trading-Portal für Aktien, ETFs und Kryptowährungen mit Prognose-Tracking und Consensus Score.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
