@@ -77,6 +77,12 @@ function createInitialState(): SystemState {
 
 function loadState(): SystemState {
   ensureDbDir();
+  if (!fs.existsSync(DB_PATH)) {
+    const examplePath = path.join(process.cwd(), "data", "db.example.json");
+    if (fs.existsSync(examplePath)) {
+      fs.copyFileSync(examplePath, DB_PATH);
+    }
+  }
   if (fs.existsSync(DB_PATH)) {
     try {
       const data = fs.readFileSync(DB_PATH, "utf-8");

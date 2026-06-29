@@ -1,20 +1,9 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# MarketOps AI
 
-# Run and deploy your AI Studio app
+## ⚠️ Important Disclaimer
 
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/f9d6cc82-e2e1-4868-871c-334733c712ec
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+* **Paper Trading Only:** This application is built for educational, research, and paper-trading purposes only.
+* **No Financial Advice:** Nothing in this application constitutes financial advice.
+* **No Real-Money Broker Integration:** This application does not connect to any real brokerages and does not execute real trades.
+* **Market Data Reliability:** Market data sourced from Yahoo Finance may be delayed, stale, incomplete, or unavailable. Do not rely on it for real-world trading.
+* **AI Analysis Limitations:** The AI analysis (powered by Gemini) can be wrong, hallucinate facts, or make incorrect predictions. It must not be treated as investment advice.
