@@ -159,7 +159,7 @@ function calculateRSI(data: number[], period: number = 14): number | null {
 // Fetch live market data for a symbol
 async function fetchLiveAssetData(symbol: string, existingAsset?: Asset): Promise<Asset | null> {
   try {
-    const quote = await yahooFinance.quote(symbol);
+    const quote: any = await yahooFinance.quote(symbol);
     if (!quote || !quote.regularMarketPrice) {
       if (existingAsset) {
         return {
@@ -312,9 +312,9 @@ app.get("/api/state", async (req, res) => {
         p1.setDate(p1.getDate() - 1); // look slightly back
         const p2 = new Date(evaluationDate);
         p2.setDate(p2.getDate() + 5); // fetch up to 5 days ahead in case of weekend/holidays
-        const queryOptions = { period1: p1, period2: p2 };
+        const queryOptions: any = { period1: p1, period2: p2 };
         
-        const hist = await yahooFinance.historical(forecast.symbol, queryOptions);
+        const hist: any[] = await yahooFinance.historical(forecast.symbol, queryOptions);
         
         // Find the first trading day on or after the evaluation date
         const validDates = hist.filter(h => new Date(h.date) >= evaluationDate);
@@ -536,7 +536,7 @@ app.post("/api/analyze", async (req, res) => {
   let quote: any = {};
   let fullHistory: any[] = [];
   try {
-    const searchRes = await yahooFinance.search(symbol);
+    const searchRes: any = await yahooFinance.search(symbol);
     if (searchRes.news && searchRes.news.length > 0) {
       realNews = searchRes.news.slice(0, 3).map(n => `- ${n.title} (Publisher: ${n.publisher} - Timestamp: ${new Date(n.providerPublishTime).toISOString()})`).join("\n");
       
@@ -563,7 +563,7 @@ app.post("/api/analyze", async (req, res) => {
     
     const p1 = new Date();
     p1.setDate(p1.getDate() - 300);
-    fullHistory = await yahooFinance.historical(symbol, { period1: p1 });
+    fullHistory = await yahooFinance.historical(symbol, { period1: p1 } as any);
 
   } catch (e) {
     realNews = "Nachrichtenabruf fehlgeschlagen.";

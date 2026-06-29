@@ -428,7 +428,7 @@ export default function App() {
 
         {/* Console global footer */}
         <footer className="bg-white border-t border-slate-100 py-4 px-6 text-center text-xs text-slate-400 select-none">
-          MarketOps AI © 2026. Entwickelt für Forschungs- und Bildungszwecke im Paper-Trading NOC. Keine finanzielle Beratung.
+          MarketOps AI v0.1 Real Data MVP © 2026. Entwickelt für Forschungs- und Bildungszwecke im Paper-Trading NOC. Keine finanzielle Beratung.
         </footer>
 
       </div>
