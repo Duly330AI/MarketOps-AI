@@ -33,6 +33,7 @@ export interface Asset {
   status: 'Bullish' | 'Neutral' | 'Bearish';
   history: PriceHistoryPoint[];
   dataQuality?: AssetDataQuality;
+  currency: string;
 }
 
 export interface Position {
@@ -154,4 +155,21 @@ export interface SystemState {
   forecasts: Forecast[];
   alerts: Alert[];
   news: NewsItem[];
+}
+
+export function getCurrencySign(currency?: string): string {
+  const cur = (currency || "USD").toUpperCase();
+  if (cur === "USD") return "$";
+  if (cur === "EUR") return "€";
+  if (cur === "GBP") return "£";
+  return cur;
+}
+
+export function formatAssetPrice(price: number, currency?: string): string {
+  const sign = getCurrencySign(currency);
+  const formatted = price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (sign === "$" || sign === "£") {
+    return `${sign}${formatted}`;
+  }
+  return `${formatted} ${sign}`;
 }

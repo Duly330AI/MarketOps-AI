@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { SystemState, Asset, AssetType, VolatilityRating } from "../types";
+import { SystemState, Asset, AssetType, VolatilityRating, formatAssetPrice } from "../types";
 import MiniSparkline from "./MiniSparkline";
 import { Plus, Search, Trash2, TrendingUp, TrendingDown, Eye, AlertTriangle, Cpu, CreditCard, ChevronRight } from "lucide-react";
 
@@ -175,7 +175,7 @@ export default function Watchlist({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Aktueller Kurs (€)</label>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Aktueller Kurs</label>
               <input
                 type="number"
                 step="any"
@@ -277,7 +277,7 @@ export default function Watchlist({
                 <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   <th className="p-4 pl-6">Asset / Symbol</th>
                   <th className="p-4">Trend (30d)</th>
-                  <th className="p-4">Kurs (€)</th>
+                  <th className="p-4">Kurs</th>
                   <th className="p-4 text-center">Tagesperf.</th>
                   <th className="p-4 text-center">7-Tage</th>
                   <th className="p-4 text-center">30-Tage</th>
@@ -319,13 +319,17 @@ export default function Watchlist({
 
                     {/* Price */}
                     <td className="p-4 font-mono font-bold text-slate-800">
-                      {asset.currentPrice.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                      {(asset.currentPrice === 0 || asset.dataQuality?.status === 'unavailable') ? (
+                        <span className="text-xs text-rose-500 bg-rose-50 px-2 py-1 rounded-md border border-rose-100" title={asset.dataQuality?.warningMessage || 'Data unavailable'}>Nicht verfügbar</span>
+                      ) : (
+                        <>{formatAssetPrice(asset.currentPrice, asset.currency)}</>
+                      )}
                     </td>
 
                     {/* Changes */}
-                    <td className="p-4 text-center">{renderPct(asset.dailyChangePercent)}</td>
-                    <td className="p-4 text-center">{renderPct(asset.change7DaysPercent)}</td>
-                    <td className="p-4 text-center">{renderPct(asset.change30DaysPercent)}</td>
+                    <td className="p-4 text-center">{(asset.currentPrice === 0 || asset.dataQuality?.status === 'unavailable') ? '-' : renderPct(asset.dailyChangePercent)}</td>
+                    <td className="p-4 text-center">{(asset.currentPrice === 0 || asset.dataQuality?.status === 'unavailable') ? '-' : renderPct(asset.change7DaysPercent)}</td>
+                    <td className="p-4 text-center">{(asset.currentPrice === 0 || asset.dataQuality?.status === 'unavailable') ? '-' : renderPct(asset.change30DaysPercent)}</td>
 
                     {/* Volatility */}
                     <td className="p-4 text-center">{getVolBadge(asset.volatility)}</td>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { SystemState, Asset, AiAnalysis, AlertType } from "../types";
+import { SystemState, Asset, AiAnalysis, AlertType, formatAssetPrice, getCurrencySign } from "../types";
 import AssetChart from "./AssetChart";
 import { Cpu, ArrowLeft, RefreshCw, Check, AlertTriangle, Play, HelpCircle, Calendar, Plus, ShieldAlert, TrendingUp, TrendingDown, Bell } from "lucide-react";
 
@@ -209,7 +209,7 @@ export default function AssetDetail({
 
         <div className="text-left md:text-right space-y-1">
           <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono flex items-center md:justify-end gap-2">
-            {asset.currentPrice.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+            {formatAssetPrice(asset.currentPrice, asset.currency)}
           </div>
           <div className="flex flex-wrap items-center md:justify-end gap-x-3 gap-y-1 text-xs">
             <span>Heute: {renderPct(asset.dailyChangePercent)}</span>
@@ -222,7 +222,7 @@ export default function AssetDetail({
       </div>
 
       {/* Course Chart */}
-      <AssetChart history={asset.history} symbol={asset.symbol} />
+      <AssetChart history={asset.history} symbol={asset.symbol} currency={asset.currency} />
 
       {/* Interactive NOC Panel (Sub Tabs) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -503,28 +503,35 @@ export default function AssetDetail({
 
                 </div>
 
+                {/* Currency warning */}
+                {asset.currency !== "EUR" && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-[11px] font-semibold">
+                    Währungshinweis: Wechselkurs-Konvertierung nicht implementiert. Diese Transaktion wird 1:1 in V€ abgerechnet.
+                  </div>
+                )}
+
                 {/* Calculation breakdown */}
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-500">
                   <div className="flex justify-between">
                     <span>Kurs:</span>
-                    <strong className="text-slate-800">{asset.currentPrice.toLocaleString("de-DE")} €</strong>
+                    <strong className="text-slate-800">{formatAssetPrice(asset.currentPrice, asset.currency)}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span>Wert:</span>
-                    <strong className="text-slate-800">{subTotal.toLocaleString("de-DE")} €</strong>
+                    <strong className="text-slate-800">{subTotal.toLocaleString("de-DE")} V€</strong>
                   </div>
                   <div className="flex justify-between">
                     <span>Gebühr (Flat/Variable):</span>
-                    <strong className="text-slate-800">{flatFee.toLocaleString("de-DE")} €</strong>
+                    <strong className="text-slate-800">{flatFee.toLocaleString("de-DE")} V€</strong>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1.5 font-bold text-slate-800">
                     <span>Gesamtwert:</span>
-                    <span>{totalCost.toLocaleString("de-DE")} €</span>
+                    <span>{totalCost.toLocaleString("de-DE")} V€</span>
                   </div>
                 </div>
 
                 <div className="flex justify-between items-center text-xs pt-2">
-                  <span className="text-slate-400">Verfügbares Guthaben: {portfolio.balance.toLocaleString("de-DE")} €</span>
+                  <span className="text-slate-400">Verfügbares Guthaben: {portfolio.balance.toLocaleString("de-DE")} V€</span>
                   <button
                     type="submit"
                     className={`px-4 py-2 text-white font-bold rounded-lg cursor-pointer ${tradeType === "BUY" ? "bg-emerald-600 hover:bg-emerald-500" : "bg-red-600 hover:bg-red-500"}`}
@@ -557,7 +564,7 @@ export default function AssetDetail({
                   </div>
 
                   <div className="flex-1 min-w-[150px]">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 font-mono">Grenzpreis (€)</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 font-mono">Grenzpreis ({getCurrencySign(asset.currency)})</label>
                     <input
                       type="number"
                       step="any"
@@ -585,7 +592,7 @@ export default function AssetDetail({
                         <div key={al.id} className="flex justify-between items-center p-2.5 bg-slate-50 border border-slate-100 rounded-lg text-xs">
                           <span>
                             Trigger bei Kurs {al.type === "price_above" ? "≥" : "≤"}{" "}
-                            <strong className="font-mono">{al.threshold.toLocaleString("de-DE")} €</strong>
+                            <strong className="font-mono">{formatAssetPrice(al.threshold, asset.currency)}</strong>
                           </span>
                           <button
                             onClick={() => onDeleteAlert(al.id)}
@@ -632,20 +639,20 @@ export default function AssetDetail({
                     </div>
                     <div className="flex justify-between border-b border-slate-800 pb-2">
                       <span className="text-slate-400">Ø Einstiegskurs:</span>
-                      <strong className="font-mono">{owned.avgBuyPrice.toLocaleString("de-DE")} €</strong>
+                      <strong className="font-mono">{formatAssetPrice(owned.avgBuyPrice, asset.currency)}</strong>
                     </div>
                     <div className="flex justify-between border-b border-slate-800 pb-2">
                       <span className="text-slate-400">Investierter Betrag:</span>
-                      <strong className="font-mono">{owned.totalCost.toLocaleString("de-DE")} €</strong>
+                      <strong className="font-mono">{owned.totalCost.toLocaleString("de-DE")} V€</strong>
                     </div>
                     <div className="flex justify-between border-b border-slate-800 pb-2">
                       <span className="text-slate-400">Aktueller Depotwert:</span>
-                      <strong className="font-mono">{owned.currentValue.toLocaleString("de-DE")} €</strong>
+                      <strong className="font-mono">{owned.currentValue.toLocaleString("de-DE")} V€</strong>
                     </div>
                     <div className="flex justify-between items-baseline pt-1">
                       <span className="text-slate-400">Gesamt-G&V:</span>
                       <span className={`font-mono font-bold ${owned.pnlAbsolute >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        {owned.pnlAbsolute >= 0 ? "+" : ""}{owned.pnlAbsolute.toLocaleString("de-DE")} € ({owned.pnlAbsolute >= 0 ? "+" : ""}{owned.pnlPercent}%)
+                        {owned.pnlAbsolute >= 0 ? "+" : ""}{owned.pnlAbsolute.toLocaleString("de-DE")} V€ ({owned.pnlAbsolute >= 0 ? "+" : ""}{owned.pnlPercent}%)
                       </span>
                     </div>
                   </div>
@@ -667,15 +674,15 @@ export default function AssetDetail({
             <div className="space-y-2 text-xs divide-y divide-slate-50">
               <div className="flex justify-between py-1.5">
                 <span className="text-slate-400">Letzter Schlusskurs:</span>
-                <span className="font-mono font-semibold text-slate-700">{asset.prevClosePrice.toLocaleString("de-DE")} €</span>
+                <span className="font-mono font-semibold text-slate-700">{formatAssetPrice(asset.prevClosePrice, asset.currency)}</span>
               </div>
               <div className="flex justify-between py-1.5">
                 <span className="text-slate-400">Kurs vor 7 Tagen:</span>
-                <span className="font-mono font-semibold text-slate-700">{asset.price7DaysAgo.toLocaleString("de-DE")} €</span>
+                <span className="font-mono font-semibold text-slate-700">{formatAssetPrice(asset.price7DaysAgo, asset.currency)}</span>
               </div>
               <div className="flex justify-between py-1.5">
                 <span className="text-slate-400">Kurs vor 30 Tagen:</span>
-                <span className="font-mono font-semibold text-slate-700">{asset.price30DaysAgo.toLocaleString("de-DE")} €</span>
+                <span className="font-mono font-semibold text-slate-700">{formatAssetPrice(asset.price30DaysAgo, asset.currency)}</span>
               </div>
               <div className="flex justify-between py-1.5">
                 <span className="text-slate-400">NOC-Volatilität:</span>

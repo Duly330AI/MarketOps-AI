@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { SystemState, Forecast } from "../types";
+import { SystemState, Forecast, formatAssetPrice } from "../types";
 import { Award, CheckCircle, XCircle, TrendingUp, TrendingDown, Clock, BarChart3, HelpCircle, ShieldAlert } from "lucide-react";
 
 interface ForecastTrackerProps {
@@ -11,7 +11,7 @@ export default function ForecastTracker({
   state,
   onSelectAsset
 }: ForecastTrackerProps) {
-  const { forecasts, lastUpdated } = state;
+  const { forecasts, assets, lastUpdated } = state;
   const [filter, setFilter] = useState<"all" | "active" | "resolved">("all");
 
   const activeForecasts = forecasts.filter((f) => f.status === "active");
@@ -128,6 +128,7 @@ export default function ForecastTracker({
           <div className="divide-y divide-slate-100">
             {filteredForecasts.map((fc) => {
               const isActive = fc.status === "active";
+              const asset = assets.find((a) => a.symbol === fc.symbol);
               
               // Calculate target date
               const start = new Date(fc.date);
@@ -168,7 +169,7 @@ export default function ForecastTracker({
                     </div>
 
                     <div className="text-xs text-slate-500">
-                      Erwartete Kursentwicklung: <strong className="text-slate-800">{fc.direction === "Bullish" ? "+" : ""}{fc.expectedChangePercent}%</strong> • Startkurs: <strong className="text-slate-700 font-mono">{fc.startPrice.toLocaleString("de-DE")} €</strong>
+                      Erwartete Kursentwicklung: <strong className="text-slate-800">{fc.direction === "Bullish" ? "+" : ""}{fc.expectedChangePercent}%</strong> • Startkurs: <strong className="text-slate-700 font-mono">{formatAssetPrice(fc.startPrice, asset?.currency)}</strong>
                     </div>
                   </div>
 
@@ -195,7 +196,7 @@ export default function ForecastTracker({
                           )}
                         </div>
                         <span className="text-[10px] text-slate-400 block font-medium">
-                          Endkurs am {fc.results?.actualEvaluationDate || fc.results?.evaluationDate}: <strong className="text-slate-700 font-mono">{fc.results?.endPrice.toLocaleString("de-DE")} €</strong>
+                          Endkurs am {fc.results?.actualEvaluationDate || fc.results?.evaluationDate}: <strong className="text-slate-700 font-mono">{fc.results ? formatAssetPrice(fc.results.endPrice, asset?.currency) : '-'}</strong>
                           {fc.results?.priceFieldUsed === 'close' && (
                             <span className="block text-amber-500 font-semibold mt-0.5">⚠️ Unadjusted Fallback</span>
                           )}

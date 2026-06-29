@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { SystemState, AlertType } from "../types";
+import { SystemState, AlertType, formatAssetPrice } from "../types";
 import { Bell, Trash2, ShieldAlert, Plus, Check, BellRing } from "lucide-react";
 
 interface AlertManagerProps {
@@ -86,9 +86,9 @@ export default function AlertManager({
                 className="w-full p-2 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
                 <option value="">-- Asset auswählen --</option>
-                {assets.map((a) => (
+                 {assets.map((a) => (
                   <option key={a.symbol} value={a.symbol}>
-                    {a.symbol} - {a.name} (Aktuell: {a.currentPrice.toLocaleString("de-DE")} €)
+                    {a.symbol} - {a.name} (Aktuell: {formatAssetPrice(a.currentPrice, a.currency)})
                   </option>
                 ))}
               </select>
@@ -107,7 +107,7 @@ export default function AlertManager({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Preis-Schwellenwert (€)</label>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Preis-Schwellenwert (in Asset-Währung)</label>
               <input
                 type="number"
                 step="any"
@@ -140,27 +140,30 @@ export default function AlertManager({
 
             {activeAlerts.length > 0 ? (
               <div className="space-y-2">
-                {activeAlerts.map((al) => (
-                  <div key={al.id} className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center transition-all hover:bg-slate-100/40">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <strong className="text-slate-800 font-bold text-sm font-mono">{al.symbol}</strong>
-                        <span className="text-xs text-slate-400 font-medium">{al.assetName}</span>
+                {activeAlerts.map((al) => {
+                  const asset = assets.find((a) => a.symbol === al.symbol);
+                  return (
+                    <div key={al.id} className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center transition-all hover:bg-slate-100/40">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-slate-800 font-bold text-sm font-mono">{al.symbol}</strong>
+                          <span className="text-xs text-slate-400 font-medium">{al.assetName}</span>
+                        </div>
+                        <span className="text-xs text-slate-500 mt-1 block">
+                          Triggert, wenn Preis {al.type === "price_above" ? "steigt über ≥" : "fällt unter ≤"}{" "}
+                          <strong className="text-slate-800 font-mono">{formatAssetPrice(al.threshold, asset?.currency)}</strong>
+                        </span>
                       </div>
-                      <span className="text-xs text-slate-500 mt-1 block">
-                        Triggert, wenn Preis {al.type === "price_above" ? "steigt über ≥" : "fällt unter ≤"}{" "}
-                        <strong className="text-slate-800 font-mono">{al.threshold.toLocaleString("de-DE")} €</strong>
-                      </span>
-                    </div>
 
-                    <button
-                      onClick={() => onDeleteAlert(al.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <button
+                        onClick={() => onDeleteAlert(al.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-slate-400 py-4 text-center">Derzeit sind keine Grenzpreisalarme scharfgestellt.</p>
@@ -176,25 +179,28 @@ export default function AlertManager({
 
             {triggeredAlerts.length > 0 ? (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {triggeredAlerts.map((al) => (
-                  <div key={al.id} className="p-3.5 bg-amber-50/40 border border-amber-100 rounded-xl flex justify-between items-center">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <strong className="text-amber-800 font-bold font-mono">{al.symbol}</strong>
-                        <span className="text-xs text-amber-700/80 font-medium">{al.assetName}</span>
+                {triggeredAlerts.map((al) => {
+                  const asset = assets.find((a) => a.symbol === al.symbol);
+                  return (
+                    <div key={al.id} className="p-3.5 bg-amber-50/40 border border-amber-100 rounded-xl flex justify-between items-center">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-amber-800 font-bold font-mono">{al.symbol}</strong>
+                          <span className="text-xs text-amber-700/80 font-medium">{al.assetName}</span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-1 leading-snug">
+                          Bedingung {al.type === "price_above" ? "Preis ≥" : "Preis ≤"}{" "}
+                          <strong className="font-mono">{formatAssetPrice(al.threshold, asset?.currency)}</strong> erfüllt.
+                          Auslösungskurs am {al.triggerDate}: <strong className="font-mono text-amber-800">{al.triggerValue ? formatAssetPrice(al.triggerValue, asset?.currency) : '-'}</strong>
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-600 mt-1 leading-snug">
-                        Bedingung {al.type === "price_above" ? "Preis ≥" : "Preis ≤"}{" "}
-                        <strong className="font-mono">{al.threshold.toLocaleString("de-DE")} €</strong> erfüllt.
-                        Auslösungskurs am {al.triggerDate}: <strong className="font-mono text-amber-800">{al.triggerValue?.toLocaleString("de-DE")} €</strong>
-                      </p>
-                    </div>
 
-                    <div className="p-1 text-amber-600 bg-amber-100 rounded-lg">
-                      <Check className="w-4 h-4 font-bold" />
+                      <div className="p-1 text-amber-600 bg-amber-100 rounded-lg">
+                        <Check className="w-4 h-4 font-bold" />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-slate-400 py-4 text-center">Bisher wurden noch keine Triggers ausgelöst.</p>

@@ -122,7 +122,7 @@ export default function App() {
   };
 
   const handleResetPortfolio = async () => {
-    if (confirm("Möchtest Du Dein Paper-Portfolio und das Trade Journal wirklich auf 10.000 € zurücksetzen?")) {
+    if (confirm("Möchtest Du Dein Paper-Portfolio und das Trade Journal wirklich auf 10.000 V€ (Paper Cash) zurücksetzen?")) {
       const res = await fetch("/api/portfolio/reset", { method: "POST" });
       if (res.ok) {
         const data = await res.json();
@@ -243,11 +243,11 @@ export default function App() {
         <div className="p-4 border-t border-slate-800 text-[11px] text-slate-500 space-y-1.5 font-medium bg-slate-950/40">
           <div className="flex justify-between">
             <span>Depotwert:</span>
-            <strong className="text-white font-mono">{state.portfolio.totalValue.toLocaleString("de-DE")} €</strong>
+            <strong className="text-white font-mono">{state.portfolio.totalValue.toLocaleString("de-DE")} V€</strong>
           </div>
           <div className="flex justify-between">
             <span>Verfügbar:</span>
-            <strong className="text-white font-mono">{state.portfolio.balance.toLocaleString("de-DE")} €</strong>
+            <strong className="text-white font-mono">{state.portfolio.balance.toLocaleString("de-DE")} V€</strong>
           </div>
         </div>
       </aside>
@@ -286,7 +286,7 @@ export default function App() {
             <div className="hidden sm:flex items-center gap-2 bg-slate-800 lg:bg-slate-50 border border-slate-700 lg:border-slate-100 px-3 py-1.5 rounded-xl font-medium text-xs">
               <Wallet className="w-3.5 h-3.5 text-indigo-400 lg:text-indigo-600" />
               <span className="text-slate-400 lg:text-slate-500">Guthaben:</span>
-              <strong className="font-mono text-white lg:text-slate-800">{state.portfolio.balance.toLocaleString("de-DE")} €</strong>
+              <strong className="font-mono text-white lg:text-slate-800">{state.portfolio.balance.toLocaleString("de-DE")} V€</strong>
             </div>
 
             {/* Time fast forward indicator */}
@@ -343,11 +343,11 @@ export default function App() {
               <div className="absolute bottom-4 left-4 right-4 p-4 border-t border-slate-800 text-xs text-slate-500 space-y-1.5 bg-slate-950/40 rounded-xl">
                 <div className="flex justify-between">
                   <span>Depotwert:</span>
-                  <strong className="text-white font-mono">{state.portfolio.totalValue.toLocaleString("de-DE")} €</strong>
+                  <strong className="text-white font-mono">{state.portfolio.totalValue.toLocaleString("de-DE")} V€</strong>
                 </div>
                 <div className="flex justify-between">
                   <span>Liquidität:</span>
-                  <strong className="text-white font-mono">{state.portfolio.balance.toLocaleString("de-DE")} €</strong>
+                  <strong className="text-white font-mono">{state.portfolio.balance.toLocaleString("de-DE")} V€</strong>
                 </div>
               </div>
 

@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { PriceHistoryPoint } from "../types";
+import { PriceHistoryPoint, formatAssetPrice } from "../types";
 
 interface AssetChartProps {
   history: PriceHistoryPoint[];
   symbol: string;
+  currency?: string;
 }
 
-export default function AssetChart({ history, symbol }: AssetChartProps) {
+export default function AssetChart({ history, symbol, currency }: AssetChartProps) {
   const [hoveredPoint, setHoveredPoint] = useState<PriceHistoryPoint | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -108,7 +109,7 @@ export default function AssetChart({ history, symbol }: AssetChartProps) {
           {hoveredPoint ? (
             <div>
               <span className="text-lg font-bold text-slate-800">
-                {hoveredPoint.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                {formatAssetPrice(hoveredPoint.price, currency)}
               </span>
               <span className="text-xs text-slate-400 ml-2 block sm:inline">
                 am {hoveredPoint.date}
@@ -117,7 +118,7 @@ export default function AssetChart({ history, symbol }: AssetChartProps) {
           ) : (
             <div>
               <span className="text-lg font-bold text-slate-800">
-                {history[history.length - 1].price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                {formatAssetPrice(history[history.length - 1].price, currency)}
               </span>
               <span className="text-xs text-slate-400 ml-2 block sm:inline">
                 aktuell

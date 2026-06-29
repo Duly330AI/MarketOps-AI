@@ -4,7 +4,9 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
+
+const yahooFinance = new YahooFinance();
 
 // Load environment variables
 dotenv.config();
@@ -22,13 +24,14 @@ import {
   Alert,
   NewsItem,
   SystemState,
-  PriceHistoryPoint
+  PriceHistoryPoint,
+  AssetDataQuality
 } from "./src/types";
 
 const app = express();
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 const DB_PATH = path.join(process.cwd(), "data", "db.json");
 
 // Suppress yahoo-finance2 notices
@@ -88,6 +91,10 @@ function loadState(): SystemState {
       const data = fs.readFileSync(DB_PATH, "utf-8");
       const parsed = JSON.parse(data);
       if (parsed.assets && parsed.portfolio) {
+        parsed.assets = parsed.assets.map((asset: any) => ({
+          ...asset,
+          currency: asset.currency || (asset.symbol.endsWith(".DE") || asset.symbol.endsWith(".F") ? "EUR" : "USD")
+        }));
         return parsed as SystemState;
       }
     } catch (e) {
@@ -164,12 +171,15 @@ function calculateRSI(data: number[], period: number = 14): number | null {
 
 // Fetch live market data for a symbol
 async function fetchLiveAssetData(symbol: string, existingAsset?: Asset): Promise<Asset | null> {
+  console.log(`Fetching live data for ${symbol}...`);
   try {
     const quote: any = await yahooFinance.quote(symbol);
+    console.log(`Quote for ${symbol}: price = ${quote?.regularMarketPrice}`);
     if (!quote || !quote.regularMarketPrice) {
       if (existingAsset) {
         return {
           ...existingAsset,
+          currency: existingAsset.currency || "USD",
           dataQuality: {
             status: 'unavailable',
             lastFetchTime: new Date().toISOString(),
@@ -197,7 +207,8 @@ async function fetchLiveAssetData(symbol: string, existingAsset?: Asset): Promis
     // Fetch up to 210 days for 200 SMA
     const period1 = new Date();
     period1.setDate(period1.getDate() - 300); // 300 calendar days is approx 210 trading days
-    const queryOptions = { period1 };
+    const period2 = new Date();
+    const queryOptions: any = { period1, period2 };
     let result = [];
     try {
        result = await yahooFinance.historical(symbol, queryOptions);
@@ -226,6 +237,14 @@ async function fetchLiveAssetData(symbol: string, existingAsset?: Asset): Promis
     const price7DaysAgo = history30.length > 7 ? history30[history30.length - 8].price : (history30[0]?.price || currentPrice);
     const price30DaysAgo = history30[0]?.price || currentPrice;
 
+    const dataQuality: AssetDataQuality = {
+      status,
+      lastMarketTime: quote.regularMarketTime?.toISOString() || new Date().toISOString(),
+      lastFetchTime: new Date().toISOString(),
+      source: 'yahoo-finance',
+      warningMessage: (!isAdj && assetType !== 'crypto') ? 'unadjusted_fallback' : undefined
+    };
+
     return {
       symbol: symbol.toUpperCase(),
       name: quote.longName || quote.shortName || symbol,
@@ -240,19 +259,15 @@ async function fetchLiveAssetData(symbol: string, existingAsset?: Asset): Promis
       volatility: existingAsset?.volatility || "medium",
       status: existingAsset?.status || "Neutral",
       history: history30,
-      dataQuality: {
-        status,
-        lastMarketTime: quote.regularMarketTime?.toISOString() || new Date().toISOString(),
-        lastFetchTime: new Date().toISOString(),
-        source: 'yahoo-finance',
-        warningMessage: (!isAdj && assetType !== 'crypto') ? 'unadjusted_fallback' : undefined
-      }
+      dataQuality,
+      currency: (quote.currency || existingAsset?.currency || "USD").toUpperCase()
     };
   } catch (err) {
     console.error(`Failed to fetch live data for ${symbol}:`, err);
     if (existingAsset) {
         return {
             ...existingAsset,
+            currency: existingAsset.currency || "USD",
             dataQuality: {
                 status: 'stale',
                 lastFetchTime: new Date().toISOString(),
@@ -266,12 +281,16 @@ async function fetchLiveAssetData(symbol: string, existingAsset?: Asset): Promis
 }
 
 // REST Endpoints
+app.get("/api/debug", (req, res) => res.json({ msg: "I AM THE NEW SERVER" }));
+
 app.get("/api/state", async (req, res) => {
   const state = loadState();
+  console.log(`[API] /state called. Assets count: ${state.assets.length}`);
   
   // Refresh all assets with live market data
   const updatedAssets = [];
   for (const asset of state.assets) {
+    console.log(`[API] /state calling fetchLiveAssetData for ${asset.symbol}`);
     const liveAsset = await fetchLiveAssetData(asset.symbol, asset);
     if (liveAsset) {
       updatedAssets.push(liveAsset);
@@ -389,7 +408,22 @@ app.post("/api/watchlist/add", async (req, res) => {
     return res.status(400).json({ error: "Asset bereits in der Watchlist vorhanden." });
   }
 
-  const liveAsset = await fetchLiveAssetData(upperSymbol, { symbol: upperSymbol, name: name || upperSymbol, type, currentPrice: 0, prevClosePrice: 0, price7DaysAgo: 0, price30DaysAgo: 0, dailyChangePercent: 0, change7DaysPercent: 0, change30DaysPercent: 0, volatility: volatility || "medium", status: status || "Neutral", history: [] });
+  const liveAsset = await fetchLiveAssetData(upperSymbol, { 
+    symbol: upperSymbol, 
+    name: name || upperSymbol, 
+    type, 
+    currentPrice: 0, 
+    prevClosePrice: 0, 
+    price7DaysAgo: 0, 
+    price30DaysAgo: 0, 
+    dailyChangePercent: 0, 
+    change7DaysPercent: 0, 
+    change30DaysPercent: 0, 
+    volatility: volatility || "medium", 
+    status: status || "Neutral", 
+    history: [],
+    currency: "USD"
+  });
 
   if (!liveAsset) {
     return res.status(400).json({ error: "Marktdaten konnten für dieses Symbol nicht geladen werden." });
@@ -569,7 +603,8 @@ app.post("/api/analyze", async (req, res) => {
     
     const p1 = new Date();
     p1.setDate(p1.getDate() - 300);
-    fullHistory = await yahooFinance.historical(symbol, { period1: p1 } as any);
+    const p2 = new Date();
+    fullHistory = await yahooFinance.historical(symbol, { period1: p1, period2: p2 } as any);
 
   } catch (e) {
     realNews = "Nachrichtenabruf fehlgeschlagen.";

@@ -1,5 +1,5 @@
 import React from "react";
-import { SystemState, Position } from "../types";
+import { SystemState, Position, formatAssetPrice } from "../types";
 import { CreditCard, RefreshCw, TrendingUp, TrendingDown, HelpCircle, ArrowUpRight, DollarSign } from "lucide-react";
 
 interface PaperPortfolioProps {
@@ -40,7 +40,12 @@ export default function PaperPortfolio({
   const cryptosPct = (cryptosAmt / totalAmt) * 100;
 
   // Currency Formatter
-  const fmt = (num: number) => num.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+  const fmt = (num: number) => `${num.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} V€`;
+
+  const hasCurrencyMismatch = portfolio.positions.some(pos => {
+    const asset = assets.find(a => a.symbol === pos.symbol);
+    return asset && asset.currency && asset.currency !== "EUR";
+  });
 
   const pnlColor = portfolio.pnlAbsolute >= 0 ? "text-emerald-600" : "text-red-600";
   const pnlBorder = portfolio.pnlAbsolute >= 0 ? "border-emerald-100" : "border-red-100";
@@ -48,6 +53,14 @@ export default function PaperPortfolio({
 
   return (
     <div className="space-y-6">
+      {hasCurrencyMismatch && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-2xl flex items-center gap-3 text-xs sm:text-sm font-medium">
+          <HelpCircle className="w-5 h-5 text-amber-500 shrink-0" />
+          <span>
+            <strong>Währungshinweis:</strong> Einige Deiner Positionen werden in USD oder anderen Fremdwährungen geführt. Da eine automatische FX-Umrechnung (Wechselkurs-Konvertierung) für das Paper-Trading noch nicht implementiert ist, werden die Werte direkt 1:1 verrechnet. Deine Gewinn- und Verlustrechnung (P/L) ist daher eine Annäherung.
+          </span>
+        </div>
+      )}
       {/* Portfolio Header Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         
@@ -192,6 +205,8 @@ export default function PaperPortfolio({
                 {portfolio.positions.map((pos) => {
                   const pnlIsPos = pos.pnlAbsolute >= 0;
                   const itemColor = pnlIsPos ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-red-600 bg-red-50 border-red-100";
+                  const asset = assets.find(a => a.symbol === pos.symbol);
+                  const assetCurrency = asset?.currency || "USD";
 
                   return (
                     <tr key={pos.symbol} className="hover:bg-slate-50/50 transition-colors">
@@ -220,12 +235,12 @@ export default function PaperPortfolio({
 
                       {/* Buy Price ø */}
                       <td className="p-4 font-mono text-slate-600">
-                        {pos.avgBuyPrice.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €
+                        {formatAssetPrice(pos.avgBuyPrice, assetCurrency)}
                       </td>
 
                       {/* Current price */}
                       <td className="p-4 font-mono text-slate-700">
-                        {pos.currentPrice.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        {formatAssetPrice(pos.currentPrice, assetCurrency)}
                       </td>
 
                       {/* Total cost */}
@@ -266,7 +281,7 @@ export default function PaperPortfolio({
           <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center">
             <DollarSign className="w-12 h-12 text-slate-300 mb-2" />
             <p className="text-sm font-semibold">Keine Wertpapiere im Depot.</p>
-            <p className="text-xs text-slate-400 mt-1">Gehe in die Watchlist und führe simulierten Käufe mit Deinem virtuellen 10.000 € Budget durch.</p>
+            <p className="text-xs text-slate-400 mt-1">Gehe in die Watchlist und führe simulierten Käufe mit Deinem virtuellen 10.000 V€ Budget durch.</p>
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import React from "react";
-import { SystemState } from "../types";
+import { SystemState, formatAssetPrice } from "../types";
 import { CreditCard, Calendar, ShoppingCart, Info, TrendingUp, TrendingDown } from "lucide-react";
 
 interface TradeJournalProps {
@@ -8,9 +8,9 @@ interface TradeJournalProps {
 }
 
 export default function TradeJournal({ state, onSelectAsset }: TradeJournalProps) {
-  const { trades } = state;
+  const { trades, assets } = state;
 
-  const fmt = (num: number) => num.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+  const fmt = (num: number) => num.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " V€";
 
   return (
     <div className="space-y-6">
@@ -31,9 +31,9 @@ export default function TradeJournal({ state, onSelectAsset }: TradeJournalProps
                   <th className="p-4">Wertpapier</th>
                   <th className="p-4 text-center">Transaktion</th>
                   <th className="p-4">Menge</th>
-                  <th className="p-4">Kurs (€)</th>
-                  <th className="p-4">Gebühren (€)</th>
-                  <th className="p-4">Gesamtvolumen (€)</th>
+                  <th className="p-4">Kurs</th>
+                  <th className="p-4">Gebühren</th>
+                  <th className="p-4">Gesamtvolumen (V€)</th>
                   <th className="p-4 pr-6">Handelsgrund / Motiv</th>
                 </tr>
               </thead>
@@ -41,6 +41,7 @@ export default function TradeJournal({ state, onSelectAsset }: TradeJournalProps
                 {trades.map((tr) => {
                   const isBuy = tr.type === "BUY";
                   const totalVolume = (tr.quantity * tr.price) + (isBuy ? tr.fee : -tr.fee);
+                  const asset = assets.find((a) => a.symbol === tr.symbol);
 
                   return (
                     <tr key={tr.id} className="hover:bg-slate-50/50 transition-colors">
@@ -80,12 +81,12 @@ export default function TradeJournal({ state, onSelectAsset }: TradeJournalProps
 
                       {/* Price */}
                       <td className="p-4 font-mono text-slate-600">
-                        {tr.price.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €
+                        {formatAssetPrice(tr.price, asset?.currency)}
                       </td>
 
                       {/* Fee */}
                       <td className="p-4 font-mono text-slate-500">
-                        {tr.fee.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €
+                        {tr.fee.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} V€
                       </td>
 
                       {/* Total Volume */}

@@ -1,5 +1,5 @@
 import React from "react";
-import { SystemState, Asset, Forecast, Alert, TradeLog } from "../types";
+import { SystemState, Asset, Forecast, Alert, TradeLog, formatAssetPrice } from "../types";
 import { TrendingUp, TrendingDown, Bell, Clock, Award, ShieldAlert, Zap, ArrowUpRight, Plus, RefreshCw } from "lucide-react";
 
 interface DashboardProps {
@@ -82,7 +82,7 @@ export default function Dashboard({
               onClick={onResetPortfolio} 
               className="text-slate-500 hover:text-red-500 transition-colors font-semibold cursor-pointer"
             >
-              Reset (10k €)
+              Reset (10k V€)
             </button>
           </div>
         </div>
@@ -213,7 +213,7 @@ export default function Dashboard({
                         <span className="text-[11px] text-slate-400 block">{asset.name}</span>
                       </div>
                       <div className="text-right">
-                        <span className="font-mono text-sm font-semibold">{asset.currentPrice.toLocaleString("de-DE")} €</span>
+                        <span className="font-mono text-sm font-semibold">{formatAssetPrice(asset.currentPrice, asset.currency)}</span>
                         <span className="text-xs font-semibold text-emerald-600 block">+{asset.dailyChangePercent}%</span>
                       </div>
                     </div>
@@ -239,7 +239,7 @@ export default function Dashboard({
                         <span className="text-[11px] text-slate-400 block">{asset.name}</span>
                       </div>
                       <div className="text-right">
-                        <span className="font-mono text-sm font-semibold">{asset.currentPrice.toLocaleString("de-DE")} €</span>
+                        <span className="font-mono text-sm font-semibold">{formatAssetPrice(asset.currentPrice, asset.currency)}</span>
                         <span className="text-xs font-semibold text-red-600 block">{asset.dailyChangePercent}%</span>
                       </div>
                     </div>
@@ -278,13 +278,14 @@ export default function Dashboard({
 
                   const isUp = fc.direction === "Bullish";
                   const color = isUp ? "text-emerald-600 bg-emerald-50" : fc.direction === "Bearish" ? "text-red-600 bg-red-50" : "text-slate-600 bg-slate-50";
+                  const asset = assets.find(a => a.symbol === fc.symbol);
 
                   return (
                     <div key={fc.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
                       <div className="flex justify-between items-center">
                         <div>
                           <span className="font-bold text-slate-800 text-sm">{fc.symbol}</span>
-                          <span className="text-[10px] text-slate-400 block font-mono">Startpreis: {fc.startPrice.toLocaleString("de-DE")} €</span>
+                          <span className="text-[10px] text-slate-400 block font-mono">Startpreis: {formatAssetPrice(fc.startPrice, asset?.currency)}</span>
                         </div>
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${color}`}>
                           {fc.direction}
@@ -323,15 +324,18 @@ export default function Dashboard({
             </h4>
             {triggeredAlerts.length > 0 ? (
               <div className="space-y-1.5 max-h-24 overflow-y-auto text-xs pr-1">
-                {triggeredAlerts.slice(0, 3).map(al => (
-                  <div key={al.id} className="flex justify-between items-center p-1.5 bg-amber-50/50 border border-amber-100 rounded-lg text-slate-700">
-                    <span className="font-semibold">{al.symbol}</span>
-                    <span>
-                      Preis hat {al.type === "price_above" ? "Überschritten" : "Unterschritten"}: {al.threshold.toLocaleString("de-DE")} € (Triggerwert: {al.triggerValue?.toLocaleString("de-DE")} €)
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">{al.triggerDate}</span>
-                  </div>
-                ))}
+                {triggeredAlerts.slice(0, 3).map(al => {
+                  const asset = assets.find(a => a.symbol === al.symbol);
+                  return (
+                    <div key={al.id} className="flex justify-between items-center p-1.5 bg-amber-50/50 border border-amber-100 rounded-lg text-slate-700">
+                      <span className="font-semibold">{al.symbol}</span>
+                      <span>
+                        Preis hat {al.type === "price_above" ? "Überschritten" : "Unterschritten"}: {formatAssetPrice(al.threshold, asset?.currency)} (Triggerwert: {al.triggerValue ? formatAssetPrice(al.triggerValue, asset?.currency) : '-'})
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">{al.triggerDate}</span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-slate-400">Bisher keine Alarme ausgelöst. Du kannst Triggers in der Asset-Detailansicht oder unter Alarme konfigurieren.</p>
