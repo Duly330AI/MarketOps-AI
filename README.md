@@ -315,3 +315,9 @@ The focus is on:
 * clear separation between simulation and real financial activity
 
 This repository should be treated as an educational tool and portfolio project, not as a production trading platform.
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
