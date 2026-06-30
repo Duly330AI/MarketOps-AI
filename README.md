@@ -11,7 +11,7 @@ MarketOps AI does **not** execute real trades. It is designed as a local paper-t
 ## Important Disclaimer
 
 * **Paper Trading Only:** This application is built for educational, research, and paper-trading purposes only.
-* **No Financial Advice:** Nothing in this application constitutes financial, investment, trading, tax, or legal advice.
+* **No Financial Advice:** This project is not financial advice, and nothing in this application constitutes financial, investment, trading, tax, or legal advice.
 * **No Real-Money Broker Integration:** The app does not connect to brokerages and does not execute real trades.
 * **Market Data Reliability:** Market data may be delayed, stale, incomplete, inaccurate, or unavailable.
 * **AI Limitations:** AI-generated analysis can be wrong, incomplete, outdated, biased, or hallucinated.
@@ -150,8 +150,6 @@ This approach keeps the app model-agnostic and makes the analysis process transp
 ---
 
 ## Screenshots
-
-Add screenshots here, for example:
 
 <img width="1861" height="920" alt="Screenshot 2026-06-30 161924" src="https://github.com/user-attachments/assets/755f27fa-6aa2-4da2-9bdd-3b6d42c0bcf1" />
 
@@ -317,9 +315,3 @@ The focus is on:
 * clear separation between simulation and real financial activity
 
 This repository should be treated as an educational tool and portfolio project, not as a production trading platform.
-
----
-
-## License
-
-Add license information here.
