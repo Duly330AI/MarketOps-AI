@@ -49,9 +49,9 @@ export const apiClient = {
       if (trade.type === "BUY") {
         const cost = subTotal + flatFee;
         if (state.portfolio.balance < cost) throw new Error("Ungenügende Liquidität");
-        
+
         state.portfolio.balance -= cost;
-        
+
         let pos = state.portfolio.positions.find(p => p.symbol === trade.symbol);
         if (pos) {
           const totalCost = pos.quantity * pos.avgBuyPrice + subTotal;
@@ -79,7 +79,7 @@ export const apiClient = {
         const cost = subTotal - flatFee;
         let pos = state.portfolio.positions.find(p => p.symbol === trade.symbol);
         if (!pos || pos.quantity < qty) throw new Error("Nicht genügend Anteile");
-        
+
         state.portfolio.balance += cost;
         pos.quantity -= qty;
         if (pos.quantity === 0) {
@@ -316,7 +316,7 @@ export const apiClient = {
         const state = getDemoState();
         const asset = state.assets.find(a => a.symbol === symbol);
         if (!asset) throw new Error("Asset not found");
-        
+
         const newAnalysis = {
           id: `demo-analysis-${Date.now()}`,
           symbol: asset.symbol,
