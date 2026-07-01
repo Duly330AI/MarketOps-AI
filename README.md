@@ -29,6 +29,21 @@ It demonstrates a complete dashboard-style workflow, but it is not intended for 
 
 ---
 
+## Live Demo
+
+A static demo is available here:
+
+[Open MarketOps-AI Static Demo](https://marketops-ai-static-demo.vercel.app)
+
+Demo notes:
+
+* Uses simulated/sample data.
+* Does not place real trades.
+* Does not call live Yahoo Finance.
+* Does not provide financial advice.
+
+---
+
 ## Core Idea
 
 MarketOps AI works like a small financial NOC-style console:

@@ -8,3 +8,5 @@ coverage/
 !.env.example
 data/db.json
 assets/.aistudio/
+
+.vercel
