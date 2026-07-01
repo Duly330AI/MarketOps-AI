@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { SystemState, Asset, AiAnalysis, AlertType, formatAssetPrice, getCurrencySign } from "../types";
 import AssetChart from "./AssetChart";
+import { apiClient, isDemoMode } from "../apiClient";
 import { Cpu, ArrowLeft, RefreshCw, Check, AlertTriangle, Play, HelpCircle, Calendar, Plus, ShieldAlert, TrendingUp, TrendingDown, Bell, Copy } from "lucide-react";
 
 interface AssetDetailProps {
@@ -75,17 +76,11 @@ export default function AssetDetail({
     setImportSuccess(false);
     setAnalysisContext(null);
     try {
-      const res = await fetch(`/api/analysis-context/${asset.symbol}?horizon=${horizon}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAnalysisContext(data);
-      } else {
-        const err = await res.json();
-        setImportError(err.error || "Fehler beim Laden des Analyse-Kontextes.");
-      }
-    } catch (err) {
+      const data = await apiClient.getAnalysisContext(asset.symbol, horizon);
+      setAnalysisContext(data);
+    } catch (err: any) {
       console.error(err);
-      setImportError("Netzwerkfehler beim Abrufen des Analyse-Kontexts.");
+      setImportError(err.message || "Netzwerkfehler beim Abrufen des Analyse-Kontexts.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -107,40 +102,26 @@ export default function AssetDetail({
     setImportSuccess(false);
 
     try {
-      const res = await fetch("/api/analysis/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symbol: asset.symbol,
-          pastedResult,
-          horizon
-        })
-      });
+      const data = await apiClient.importAnalysis(asset.symbol, pastedResult, horizon);
 
-      if (res.ok) {
-        const data = await res.json();
-        setImportSuccess(true);
-        setPastedResult("");
-        setAnalysisContext(null);
-        // Trigger state reload in parent component so that list and latest analysis update
-        await onRunAiAnalysis(asset.symbol, horizon);
-        
-        // Auto-set expected change based on imported properties if available
-        const imported = data.analysis;
-        if (imported && imported.expectedReturnPercent !== undefined) {
-          setExpectedChange(Number(imported.expectedReturnPercent));
-        } else {
-          const isBuy = imported?.recommendation === "Kaufen";
-          const isSell = imported?.recommendation === "Verkaufen";
-          setExpectedChange(isBuy ? 10.5 : isSell ? -10.5 : 0);
-        }
+      setImportSuccess(true);
+      setPastedResult("");
+      setAnalysisContext(null);
+      // Trigger state reload in parent component so that list and latest analysis update
+      await onRunAiAnalysis(asset.symbol, horizon);
+      
+      // Auto-set expected change based on imported properties if available
+      const imported = data.analysis;
+      if (imported && imported.expectedReturnPercent !== undefined) {
+        setExpectedChange(Number(imported.expectedReturnPercent));
       } else {
-        const err = await res.json();
-        setImportError(err.error || "Fehler beim Importieren der Analyse.");
+        const isBuy = imported?.recommendation === "Kaufen";
+        const isSell = imported?.recommendation === "Verkaufen";
+        setExpectedChange(isBuy ? 10.5 : isSell ? -10.5 : 0);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setImportError("Netzwerkfehler beim Importieren der Analyse.");
+      setImportError(err.message || "Netzwerkfehler beim Importieren der Analyse.");
     }
   };
 
@@ -439,7 +420,37 @@ export default function AssetDetail({
 
                     {/* Step 2: Paste Result */}
                     <div className="space-y-2 bg-white p-4 rounded-lg border border-indigo-100">
-                      <span className="text-xs font-bold text-slate-700 block">Schritt 2: Analyse-Ergebnis (JSON) einfügen</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-700 block">Schritt 2: Analyse-Ergebnis (JSON) einfügen</span>
+                        {isDemoMode && (
+                          <button
+                            onClick={() => {
+                              setPastedResult(JSON.stringify({
+                                recommendation: "Kaufen",
+                                score: 85,
+                                summary: "Sample analysis result injected for demo mode.",
+                                bullCase: "Sample bull case.",
+                                bearCase: "Sample bear case.",
+                                technicalAnalysis: "Looking solid.",
+                                fundamentalAnalysis: "Growing revenue.",
+                                newsSentiment: "Positive overall.",
+                                riskRating: "medium",
+                                expectedReturnPercent: 12.5,
+                                expectedDirection: "Bullish",
+                                targetPriceOptional: asset.currentPrice * 1.125
+                              }, null, 2));
+                            }}
+                            className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded text-[10px] flex items-center gap-1 cursor-pointer transition-all"
+                          >
+                            Beispiel-JSON einfügen
+                          </button>
+                        )}
+                      </div>
+                      {isDemoMode && (
+                        <p className="text-[11px] font-semibold text-amber-600">
+                          This demo uses sample AI analysis data. It is not a live model response.
+                        </p>
+                      )}
                       <p className="text-[11px] text-slate-500 leading-relaxed">
                         Führe die Analyse mit deiner bevorzugten KI durch und füge das unformatiert ausgegebene JSON hier ein.
                       </p>

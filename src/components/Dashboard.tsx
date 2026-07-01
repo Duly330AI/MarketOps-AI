@@ -1,6 +1,7 @@
 import React from "react";
 import { SystemState, Asset, Forecast, Alert, TradeLog, formatAssetPrice } from "../types";
 import { TrendingUp, TrendingDown, Bell, Clock, Award, ShieldAlert, Zap, ArrowUpRight, Plus, RefreshCw } from "lucide-react";
+import { isDemoMode } from "../apiClient";
 
 interface DashboardProps {
   state: SystemState;
@@ -41,18 +42,20 @@ export default function Dashboard({
 
   return (
     <div className="space-y-6">
-      {/* Real Time Data Status Banner */}
+      {/* Market data status banner */}
       <div className="bg-slate-900 text-white p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-md border border-slate-800">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-slate-400 text-xs font-mono uppercase tracking-wider">
             <Clock className="w-4 h-4 text-emerald-400" />
-            <span>Market Data NOC</span>
+            <span>{isDemoMode ? "Demo Data NOC" : "Market Data NOC"}</span>
           </div>
           <h2 className="text-xl font-bold tracking-tight">
             Zuletzt aktualisiert: <span className="text-emerald-400 font-mono">{new Date(lastUpdated).toLocaleTimeString()}</span>
           </h2>
           <p className="text-xs text-slate-400">
-            Das System nutzt echte Marktdaten für alle Kurse und Analysen. Stale Data wird gekennzeichnet.
+            {isDemoMode
+              ? "Diese statische Demo nutzt simulierte Beispieldaten. Es werden keine externen Marktdaten geladen."
+              : "Das System nutzt echte Marktdaten für alle Kurse und Analysen. Stale Data wird gekennzeichnet."}
           </p>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { SystemState, Asset, AssetType, VolatilityRating, AlertType } from "./types";
+import { apiClient, isDemoMode } from "./apiClient";
 import Dashboard from "./components/Dashboard";
 import Watchlist from "./components/Watchlist";
 import PaperPortfolio from "./components/PaperPortfolio";
@@ -34,13 +35,10 @@ export default function App() {
   // Load backend state on mount
   const fetchState = async () => {
     try {
-      const res = await fetch("/api/state");
-      if (res.ok) {
-        const data = await res.json();
-        setState(data);
-      }
+      const data = await apiClient.getState();
+      setState(data);
     } catch (e) {
-      console.error("Failed to fetch state from Express backend:", e);
+      console.error("Failed to fetch state:", e);
     } finally {
       setIsFetching(false);
     }
@@ -53,18 +51,8 @@ export default function App() {
   }, []);
 
   const handleExecuteTrade = async (trade: { symbol: string; type: "BUY" | "SELL"; quantity: number; reason: string }) => {
-    const res = await fetch("/api/trade", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(trade)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setState(data);
-    } else {
-      const err = await res.json();
-      throw new Error(err.error || "Transaktion fehlgeschlagen.");
-    }
+    const data = await apiClient.executeTrade(trade);
+    setState(data);
   };
 
   const handleRunAiAnalysis = async (symbol: string, horizon: "1d" | "7d" | "30d" | "90d") => {
@@ -72,54 +60,32 @@ export default function App() {
   };
 
   const handleSubmitForecast = async (analysisId: string, expectedChangePercent: number) => {
-    const res = await fetch("/api/forecast/submit-from-analysis", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ analysisId, expectedChangePercent })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setState(data);
-    } else {
-      const err = await res.json();
-      throw new Error(err.error || "Fehler beim Erstellen der Prognose.");
-    }
+    const data = await apiClient.submitForecast(analysisId, expectedChangePercent);
+    setState(data);
   };
 
   const handleAddAlert = async (alert: { symbol: string; type: AlertType; threshold: number }) => {
-    const res = await fetch("/api/alerts/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(alert)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setState(data);
-    } else {
-      const err = await res.json();
-      throw new Error(err.error || "Fehler beim Erzeugen des Alarms.");
-    }
+    const data = await apiClient.addAlert(alert);
+    setState(data);
   };
 
   const handleDeleteAlert = async (id: string) => {
-    const res = await fetch("/api/alerts/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setState(data);
-    }
+    const data = await apiClient.deleteAlert(id);
+    setState(data);
   };
 
   const handleResetPortfolio = async () => {
-    if (confirm("Möchtest Du Dein Paper-Portfolio und das Trade Journal wirklich auf 10.000 V€ (Paper Cash) zurücksetzen?")) {
-      const res = await fetch("/api/portfolio/reset", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
+    const resetMessage = isDemoMode
+      ? "Möchtest Du die statische Demo wirklich auf den ursprünglichen Beispielzustand zurücksetzen?"
+      : "Möchtest Du Dein Paper-Portfolio und das Trade Journal wirklich auf 10.000 V€ (Paper Cash) zurücksetzen?";
+
+    if (confirm(resetMessage)) {
+      try {
+        const data = await apiClient.resetPortfolio();
         setState(data);
-        alert("Portfolio erfolgreich zurückgesetzt.");
+        alert(isDemoMode ? "Demo-Zustand erfolgreich zurückgesetzt." : "Portfolio erfolgreich zurückgesetzt.");
+      } catch (e: any) {
+        alert(e.message || "Fehler beim Zurücksetzen.");
       }
     }
   };
@@ -132,29 +98,20 @@ export default function App() {
     volatility: VolatilityRating;
     status: 'Bullish' | 'Neutral' | 'Bearish';
   }) => {
-    const res = await fetch("/api/watchlist/add", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(asset)
-    });
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const data = await apiClient.addWatchlistAsset(asset);
       setState(data);
-    } else {
-      const err = await res.json();
-      alert(err.error || "Fehler beim Hinzufügen des Tickers.");
+    } catch (err: any) {
+      alert(err.message || "Fehler beim Hinzufügen des Tickers.");
     }
   };
 
   const handleRemoveWatchlistAsset = async (symbol: string) => {
-    const res = await fetch("/api/watchlist/remove", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol })
-    });
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const data = await apiClient.removeWatchlistAsset(symbol);
       setState(data);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -247,6 +204,12 @@ export default function App() {
       {/* MOBILE HEADER & NAVIGATION */}
       <div className="flex flex-col flex-1 min-w-0">
         
+        {isDemoMode && (
+          <div className="bg-amber-100 text-amber-900 text-xs font-semibold py-1.5 px-4 text-center border-b border-amber-200">
+            Demo mode — simulated/sample data. No real trades are placed. Market data is not live. This is not financial advice.
+          </div>
+        )}
+
         {/* Top Navbar */}
         <header className="sticky top-0 z-20 bg-slate-900 lg:bg-white text-white lg:text-slate-800 h-16 border-b border-slate-800 lg:border-slate-100 flex items-center justify-between px-4 sm:px-6 shadow-xs select-none">
           <div className="flex items-center gap-3">
@@ -420,7 +383,9 @@ export default function App() {
 
         {/* Console global footer */}
         <footer className="bg-white border-t border-slate-100 py-4 px-6 text-center text-xs text-slate-400 select-none">
-          MarketOps AI v0.1 Real Data MVP © 2026. Entwickelt für Forschungs- und Bildungszwecke im Paper-Trading NOC. Keine finanzielle Beratung.
+          {isDemoMode
+            ? "MarketOps AI v0.1 Static Demo © 2026. Simulierte Demo-Daten für Portfolio- und Bildungszwecke. Keine finanzielle Beratung."
+            : "MarketOps AI v0.1 Real Data MVP © 2026. Entwickelt für Forschungs- und Bildungszwecke im Paper-Trading NOC. Keine finanzielle Beratung."}
         </footer>
 
       </div>

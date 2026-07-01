@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 export type AssetType = 'stock' | 'etf' | 'crypto';
 export type VolatilityRating = 'low' | 'medium' | 'high' | 'extreme';
 export type RecommendationType = 'Beobachten' | 'Kaufen' | 'Halten' | 'Verkaufen';
