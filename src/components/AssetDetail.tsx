@@ -109,7 +109,7 @@ export default function AssetDetail({
       setAnalysisContext(null);
       // Trigger state reload in parent component so that list and latest analysis update
       await onRunAiAnalysis(asset.symbol, horizon);
-      
+
       // Auto-set expected change based on imported properties if available
       const imported = data.analysis;
       if (imported && imported.expectedReturnPercent !== undefined) {
